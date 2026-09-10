@@ -207,27 +207,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                         </div>
 
-                        {/* Close button box */}
-                        <button
-                            onClick={() => setSidebarOpen(false)}
-                            style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '6px',
-                                border: '1px solid #1a2744',
-                                background: '#0b1326',
-                                color: '#94a3b8',
-                                display: 'grid',
-                                placeItems: 'center',
-                                cursor: 'pointer',
-                                fontSize: '11px',
-                                flexShrink: 0
-                            }}
-                            className="hover:bg-slate-800"
-                            title="Close Sidebar"
-                        >
-                            <i className="fas fa-times"></i>
-                        </button>
+                        {/* Compact tools beside the sidebar close control */}
+                        <div className="sidebar-header-tools">
+                            <ConnectionIndicator compact />
+                            <a
+                                className="sidebar-header-tool-button"
+                                href="https://sales.regen-digital.com/my-call-quality"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Open My Call Quality in a new tab"
+                                title="My Call Quality"
+                            >
+                                <i className="fas fa-headset" aria-hidden="true"></i>
+                            </a>
+                            <button
+                                onClick={() => setSidebarOpen(false)}
+                                style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #1a2744',
+                                    background: '#0b1326',
+                                    color: '#94a3b8',
+                                    display: 'grid',
+                                    placeItems: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    flexShrink: 0
+                                }}
+                                className="hover:bg-slate-800"
+                                title="Close Sidebar"
+                                aria-label="Close Sidebar"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
 
                     {/* User Profile Avatar / Sign In with Google */}
@@ -526,7 +540,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                             <i className={`fas fa-chevron-${toolsExpanded ? 'down' : 'right'}`} style={{ fontSize: '9px', color: '#64748b' }}></i>
                         </button>
-                        <ConnectionIndicator compact />
                     </div>
 
                     {toolsExpanded && (
