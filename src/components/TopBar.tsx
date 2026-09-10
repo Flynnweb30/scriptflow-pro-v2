@@ -275,19 +275,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                     </div>
                 </div>
 
-                <div className="topbar-dialer-row">
-                    <button
-                        type="button"
-                        className="topbar-dialer-button"
-                        onClick={() => { window.location.href = 'https://sales.regen-digital.com/campaigns/1f9164c5-48ce-42db-8af5-f6885d8f0077/dialer?mode=pooled'; }}
-                        aria-label="Open Regen Digital pooled dialer"
-                        title="Open pooled dialer"
-                    >
-                        <i className="fas fa-phone" aria-hidden="true"></i>
-                        <span>Open Dialer</span>
-                    </button>
-                </div>
-
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {/* Notification Bell */}
                     <div className="notification-bell-container" style={{ position: 'relative' }} ref={dropdownRef}>

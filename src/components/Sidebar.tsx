@@ -281,35 +281,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
 
-                {/* Search Scripts Bar */}
+                {/* Search Scripts + external calling tools */}
                 <div style={{ padding: '12px 14px 6px 14px' }}>
-                    <div style={{ position: 'relative', width: '100%' }}>
-                        <i className="fas fa-search" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7', fontSize: '12px' }}></i>
-                        <input 
-                            type="text" 
-                            placeholder="Search scripts..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{
-                                width: '100%',
-                                height: '34px',
-                                padding: '0 10px 0 30px',
-                                borderRadius: '8px',
-                                border: '1px solid #142036',
-                                background: '#091020',
-                                color: '#f1f5f9',
-                                fontSize: '12px',
-                                outline: 'none'
-                            }}
-                        />
-                        {searchQuery && (
-                            <button 
-                                onClick={() => setSearchQuery('')}
-                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
-                            >
-                                <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
-                            </button>
-                        )}
+                    <div className="sidebar-script-search-tools">
+                        <div className="sidebar-script-search">
+                            <i className="fas fa-search" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7', fontSize: '12px' }}></i>
+                            <input 
+                                type="text" 
+                                placeholder="Search scripts..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                aria-label="Search scripts"
+                            />
+                            {searchQuery && (
+                                <button 
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    aria-label="Clear script search"
+                                    title="Clear search"
+                                >
+                                    <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
+                                </button>
+                            )}
+                        </div>
+                        <a
+                            className="sidebar-external-tool-button"
+                            href="https://sales.regen-digital.com/campaigns/1f9164c5-48ce-42db-8af5-f6885d8f0077/dialer?mode=pooled"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Open Regen Digital pooled dialer in a new tab"
+                            title="Open pooled dialer"
+                        >
+                            <i className="fas fa-phone" aria-hidden="true"></i>
+                        </a>
+                        <a
+                            className="sidebar-external-tool-button"
+                            href="https://sales.regen-digital.com/my-insights"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Open Regen Digital My Insights in a new tab"
+                            title="Open My Insights"
+                        >
+                            <i className="fas fa-chart-line" aria-hidden="true"></i>
+                        </a>
                     </div>
                 </div>
 
