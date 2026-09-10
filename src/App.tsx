@@ -388,6 +388,10 @@ export const App: React.FC = () => {
                         <AnalyticsHub appointments={appointments} tasks={tasks} closers={closers} />
                     )}
 
+                    {activeTab === 'speedtest' && (
+                        <SpeedTest />
+                    )}
+
                     {activeTab === 'tasks' && (
                         <FollowUpTasks
                             tasks={tasks}
@@ -409,8 +413,6 @@ export const App: React.FC = () => {
                             }}
                         />
                     )}
-
-                    {activeTab === 'speedtest' && <SpeedTest />}
                 </div>
             </main>
 

@@ -192,85 +192,6 @@ body {
 .pulse { animation: pulse 2s ease-in-out infinite; }
 
 
-
-/* ============================================================
-   REAL-TIME CONNECTION INDICATOR
-   Lightweight, hoverable network health panel for live-call use.
-   ============================================================ */
-.connection-indicator {
-    position: relative;
-    width: 124px;
-    border: 1px solid rgba(30, 41, 59, 0.9);
-    border-radius: 9px;
-    background: rgba(8, 14, 30, 0.72);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 8px 9px;
-    color: #cbd5e1;
-}
-.connection-indicator-main {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-}
-.connection-indicator-icon {
-    height: 18px;
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    flex-shrink: 0;
-}
-.connection-bar {
-    width: 4px;
-    min-height: 5px;
-    border-radius: 2px 2px 1px 1px;
-    background: #334155;
-    opacity: .65;
-    transition: background .2s ease, opacity .2s ease, box-shadow .2s ease;
-}
-.connection-indicator-good .connection-bar.filled { background: #22c55e; opacity: 1; box-shadow: 0 0 6px rgba(34,197,94,.28); }
-.connection-indicator-fair .connection-bar.filled { background: #eab308; opacity: 1; box-shadow: 0 0 6px rgba(234,179,8,.22); }
-.connection-indicator-poor .connection-bar.filled { background: #ef4444; opacity: 1; box-shadow: 0 0 6px rgba(239,68,68,.2); }
-.connection-indicator-lost .connection-bar { background: #ef4444; opacity: .35; }
-.connection-indicator-copy { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
-.connection-indicator-title { font-size: 10px; font-weight: 800; color: #e2e8f0; }
-.connection-indicator-status { font-size: 9px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.connection-metrics-popover {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 8px);
-    width: 270px;
-    padding: 12px;
-    border: 1px solid #24314a;
-    border-radius: 11px;
-    background: rgba(9, 14, 26, 0.98);
-    box-shadow: 0 18px 40px rgba(0,0,0,.42);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(4px);
-    pointer-events: none;
-    transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
-    z-index: 120;
-}
-.connection-indicator:hover .connection-metrics-popover,
-.connection-indicator:focus-within .connection-metrics-popover {
-    opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
-}
-.connection-metrics-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 10px; font-size: 11px; font-weight: 800; color: #f1f5f9; }
-.connection-metrics-state { font-size: 9px; color: #67e8f9; font-weight: 700; }
-.connection-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.connection-metric { padding: 7px 8px; border: 1px solid rgba(51,65,85,.55); border-radius: 7px; background: rgba(15,23,42,.7); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.connection-metric span { font-size: 8px; color: #64748b; }
-.connection-metric strong { font-size: 10px; color: #e2e8f0; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.connection-metrics-footnote { margin-top: 9px; font-size: 8px; line-height: 1.35; color: #475569; }
-@media (max-width: 900px) {
-    .connection-metrics-popover { left: auto; right: 0; bottom: calc(100% + 8px); transform: translateY(4px); width: min(270px, calc(100vw - 34px)); }
-    .connection-indicator:hover .connection-metrics-popover, .connection-indicator:focus-within .connection-metrics-popover { transform: translateY(0); }
-}
-
 /* Fixed, transparent US timezone hero clock. It stays centered above the
    workspace without consuming sidebar space or covering interactive content. */
 .us-timezone-bar {
@@ -501,127 +422,102 @@ body.light-theme .us-timezone-bar {
     .activities-timezone-control select { max-width: none !important; width: 100%; }
 }
 
-@media (max-width: 640px) {
-    .connection-indicator { width: 112px; padding: 7px 8px; }
-    .connection-indicator-title { font-size: 9px; }
-    .connection-indicator-status { font-size: 8px; }
-}
-
 /* ============================================================
-   NETWORK STATUS + SPEED TEST
+   NETWORK MONITOR / CONNECTION INDICATOR
    ============================================================ */
-.sidebar-connection-area {
-    padding: 8px 12px 9px;
-    border-top: 1px solid #0f1a2e;
-    border-bottom: 1px solid #0f1a2e;
-    background: rgba(7, 12, 24, 0.72);
-    flex-shrink: 0;
-}
-.network-status {
+.connection-indicator {
     position: relative;
-    width: 100%;
+    flex: 0 0 auto;
+    z-index: 20;
 }
-.network-status-trigger {
-    width: 100%;
-    min-height: 38px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    border: 1px solid rgba(51,65,85,.72);
-    border-radius: 9px;
-    padding: 7px 9px;
-    background: rgba(15,23,42,.62);
+.connection-indicator__button {
+    min-height: 30px;
+    border: 1px solid rgba(71,85,105,.48);
+    border-radius: 8px;
+    background: rgba(15,23,42,.55);
     color: #cbd5e1;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 7px;
     cursor: pointer;
-    text-align: left;
-    transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    font: inherit;
 }
-.network-status-trigger:hover,
-.network-status-trigger:focus-visible {
-    border-color: rgba(56,189,248,.5);
-    background: rgba(15,23,42,.9);
+.connection-indicator__button:hover,
+.connection-indicator__button:focus-visible {
+    background: rgba(30,41,59,.82);
+    border-color: rgba(56,189,248,.45);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(56,189,248,.08);
 }
-.network-bars {
-    height: 18px;
-    display: flex;
+.connection-bars {
+    display: inline-flex;
     align-items: flex-end;
     gap: 2px;
-    flex-shrink: 0;
+    height: 16px;
 }
-.network-bar {
-    width: 4px;
-    border-radius: 2px 2px 1px 1px;
+.connection-bars span {
+    display: block;
+    width: 3px;
+    border-radius: 2px;
     background: #334155;
-    opacity: .55;
-    transition: background .2s ease, opacity .2s ease, height .2s ease;
+    opacity: .8;
 }
-.network-bar:nth-child(1) { height: 5px; }
-.network-bar:nth-child(2) { height: 9px; }
-.network-bar:nth-child(3) { height: 13px; }
-.network-bar:nth-child(4) { height: 17px; }
-.network-bars-4 .network-bar { background: #22c55e; opacity: 1; }
-.network-bars-3 .network-bar:nth-child(-n+3) { background: #22c55e; opacity: 1; }
-.network-bars-2 .network-bar:nth-child(-n+2) { background: #eab308; opacity: 1; }
-.network-bars-1 .network-bar:nth-child(1) { background: #ef4444; opacity: 1; }
-.network-bars-0 .network-bar { background: #ef4444; opacity: .22; }
-.network-bars-checking .network-bar { background: #64748b; opacity: .7; animation: networkPulse 1.4s ease-in-out infinite; }
-.network-bars-checking .network-bar:nth-child(2) { animation-delay: .1s; }
-.network-bars-checking .network-bar:nth-child(3) { animation-delay: .2s; }
-.network-bars-checking .network-bar:nth-child(4) { animation-delay: .3s; }
-@keyframes networkPulse { 0%,100% { opacity: .35; } 50% { opacity: .9; } }
-.network-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.network-status-dot.is-online { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.55); }
-.network-status-dot.is-checking { background: #64748b; animation: networkPulse 1.4s ease-in-out infinite; }
-.network-status-dot.is-offline { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,.5); }
-.network-status-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 800; color: #e2e8f0; }
-.network-status-trigger::after { content: '⌄'; font-size: 11px; color: #64748b; margin-left: auto; transform: translateY(-1px); }
-.network-status-popover {
+.connection-bars span:nth-child(1) { height: 5px; }
+.connection-bars span:nth-child(2) { height: 8px; }
+.connection-bars span:nth-child(3) { height: 12px; }
+.connection-bars span:nth-child(4) { height: 16px; }
+.connection-bars span.active { background: #22c55e; opacity: 1; box-shadow: 0 0 5px rgba(34,197,94,.35); }
+.connection-indicator__button.degraded .connection-bars span.active { background: #f59e0b; box-shadow: 0 0 5px rgba(245,158,11,.28); }
+.connection-indicator__button.offline .connection-bars span.active,
+.connection-indicator__button.checking .connection-bars span.active { background: #ef4444; box-shadow: none; }
+.connection-indicator__label { font-size: 10px; font-weight: 700; white-space: nowrap; }
+.connection-popover {
     position: absolute;
-    left: calc(100% + 10px);
-    bottom: 0;
-    width: 290px;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 300px;
     padding: 12px;
-    border: 1px solid #24314a;
-    border-radius: 11px;
-    background: rgba(9,14,26,.98);
-    box-shadow: 0 18px 40px rgba(0,0,0,.42);
+    border: 1px solid rgba(71,85,105,.6);
+    border-radius: 12px;
+    background: rgba(7,12,24,.97);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    z-index: 1200;
+    box-shadow: 0 18px 45px rgba(0,0,0,.42);
+    color: #e2e8f0;
 }
-.network-status-heading { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:10px; font-size:11px; font-weight:800; color:#f1f5f9; }
-.network-quality-text-4 { color:#4ade80; }
-.network-quality-text-3 { color:#4ade80; }
-.network-quality-text-2 { color:#facc15; }
-.network-quality-text-1, .network-offline-text { color:#f87171; }
-.network-quality-text-checking { color:#94a3b8; }
-.network-metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-.network-metric-grid > div { padding:7px 8px; border:1px solid rgba(51,65,85,.55); border-radius:7px; background:rgba(15,23,42,.7); display:flex; flex-direction:column; gap:2px; min-width:0; }
-.network-metric-grid span { font-size:8px; color:#64748b; }
-.network-metric-grid strong { font-size:10px; color:#e2e8f0; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.network-status-footnote { margin-top:9px; font-size:8px; line-height:1.4; color:#64748b; }
-.speed-test-panel { width:100%; max-width:1100px; margin:0 auto; border:1px solid #1e293b; border-radius:18px; background:rgba(8,14,30,.78); overflow:hidden; box-shadow:0 18px 45px rgba(0,0,0,.2); }
-.speed-test-header { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:18px 20px; border-bottom:1px solid #1e293b; }
-.speed-test-eyebrow { font-size:9px; font-weight:900; letter-spacing:.12em; color:#22d3ee; }
-.speed-test-header h2 { margin:4px 0 4px; font-size:22px; color:#f8fafc; }
-.speed-test-header p { margin:0; font-size:11px; color:#64748b; }
-.speed-test-external { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid #334155; border-radius:8px; color:#cbd5e1; text-decoration:none; font-size:10px; font-weight:800; white-space:nowrap; }
-.speed-test-external:hover { border-color:#38bdf8; color:#e0f2fe; }
-.speed-test-frame-wrap { position:relative; min-height:400px; background:#000; }
-.speed-test-frame-wrap iframe { display:block; width:100%; min-height:400px; border:0; }
-.speed-test-loading { position:absolute; inset:0; z-index:1; display:flex; align-items:center; justify-content:center; gap:9px; color:#94a3b8; font-size:12px; background:#030712; pointer-events:none; }
-.speed-test-fallback { min-height:400px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:28px; background:#080e1e; }
-.speed-test-fallback-icon { width:52px; height:52px; border-radius:14px; display:grid; place-items:center; background:#0f172a; border:1px solid #1e293b; color:#22d3ee; font-size:22px; margin-bottom:12px; }
-.speed-test-fallback h3 { margin:0 0 6px; color:#f8fafc; font-size:15px; }
-.speed-test-fallback p { max-width:460px; margin:0 0 15px; color:#64748b; font-size:11px; line-height:1.5; }
-@media (max-width: 1024px) {
-    .network-status-popover { left: 0; bottom: calc(100% + 8px); }
-}
+.connection-popover__header,
+.connection-popover__status { display:flex; align-items:center; justify-content:space-between; }
+.connection-popover__header { margin-bottom: 5px; font-size: 12px; }
+.connection-popover__status { justify-content:flex-start; color:#94a3b8; font-size:10px; margin-bottom:10px; }
+.connection-state-dot { width:7px; height:7px; border-radius:50%; background:#22c55e; box-shadow:0 0 7px rgba(34,197,94,.55); }
+.connection-state-dot.degraded { background:#f59e0b; box-shadow:0 0 7px rgba(245,158,11,.5); }
+.connection-state-dot.offline { background:#ef4444; box-shadow:0 0 7px rgba(239,68,68,.5); }
+.connection-state-dot.checking { background:#64748b; box-shadow:none; }
+.connection-metrics { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid rgba(71,85,105,.28); }
+.connection-metrics > div { display:flex; flex-direction:column; gap:3px; padding:8px 6px; border-bottom:1px solid rgba(71,85,105,.2); }
+.connection-metrics span { color:#64748b; font-size:9px; }
+.connection-metrics strong { color:#e2e8f0; font-size:11px; font-variant-numeric:tabular-nums; }
+.connection-popover__note { margin-top:9px; color:#64748b; font-size:8.5px; line-height:1.4; }
+.connection-indicator--compact .connection-indicator__button { padding: 4px 6px; min-height: 28px; }
+.connection-indicator--compact .connection-indicator__label { display:none; }
+
+/* ============================================================
+   SPEED TEST
+   ============================================================ */
+.speed-test-page { width:100%; min-height:calc(100vh - 150px); }
+.speed-test-page__header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.speed-test-page__header h1 { margin:3px 0 5px; font-size:24px; font-weight:800; color:var(--text-primary); }
+.speed-test-page__header p { color:var(--text-muted); font-size:12px; }
+.speed-test-page .eyebrow { color:#38bdf8; font-size:9px; font-weight:800; letter-spacing:.1em; }
+.speed-test-page__fallback { flex:0 0 auto; padding:8px 12px; border:1px solid #334155; border-radius:8px; color:#cbd5e1; text-decoration:none; font-size:11px; font-weight:700; }
+.speed-test-page__fallback:hover { border-color:#38bdf8; color:#7dd3fc; }
+.speed-test-frame { width:100%; min-height:400px; overflow:hidden; border:1px solid var(--border-color); border-radius:14px; background:#fff; }
+.speed-test-frame iframe { display:block; width:100%; min-height:400px; border:0; background:#fff; }
+.speed-test-page__help { margin-top:8px; color:#64748b; font-size:10px; }
+.speed-test-page__help a { color:#7dd3fc; }
 @media (max-width: 640px) {
-    .network-status-popover { width:min(290px, calc(100vw - 28px)); }
-    .speed-test-header { flex-direction:column; align-items:flex-start; }
-    .speed-test-external { width:100%; justify-content:center; }
-    .speed-test-frame-wrap, .speed-test-frame-wrap iframe, .speed-test-fallback { min-height:320px; height:320px; }
+    .connection-popover { position: fixed; top: 58px; left: 10px; right:10px; width:auto; }
+    .speed-test-page__header { align-items:stretch; flex-direction:column; }
+    .speed-test-page__fallback { align-self:flex-start; }
+    .speed-test-frame, .speed-test-frame iframe { min-height:360px; }
 }

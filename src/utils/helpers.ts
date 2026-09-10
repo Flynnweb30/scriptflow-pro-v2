@@ -156,8 +156,7 @@ export const Utils = {
             'Rescheduled': 'status-rescheduled-sm',
             'Overdue': 'status-overdue-sm',
             'Held': 'status-held-sm',
-            'No Show': 'status-no-show-sm',
-            'Quarantined': 'status-quarantined-sm'
+            'No Show': 'status-no-show-sm'
         };
         return map[status] || 'status-pending-sm';
     },
@@ -239,17 +238,11 @@ export const Utils = {
         if (!appt) return false;
         const status = String(this.getStatus(appt) || '').toLowerCase().replace(/[-_]/g, ' ').trim();
         const primary = String(appt.primaryStatus || '').toLowerCase().replace(/[-_]/g, ' ').trim();
-        return status === 'warm callback' || primary === 'warm callback' || appt.appointmentType === 'callback' || appt.eventType === 'callback' || Boolean(appt.callbackOfAppointmentId);
-    },
-
-    isFollowUpAppointment(appt?: Partial<Appointment> | null): boolean {
-        if (!appt) return false;
-        const explicit = `${appt.appointmentType || ''} ${appt.eventType || ''}`.toLowerCase();
-        return explicit.includes('follow') || Boolean(appt.followUpType);
+        return status === 'warm callback' || primary === 'warm callback' || appt.appointmentType === 'callback' || appt.eventType === 'callback';
     },
 
     isMeetingAppointment(appt?: Partial<Appointment> | null): boolean {
-        return !!appt && !this.isCallbackAppointment(appt) && !this.isFollowUpAppointment(appt);
+        return !!appt && !this.isCallbackAppointment(appt);
     },
 
     calculateLeadScore(appt?: Partial<Appointment> | null): number {
