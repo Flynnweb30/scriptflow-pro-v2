@@ -422,6 +422,35 @@ body.light-theme .us-timezone-bar {
     .activities-timezone-control select { max-width: none !important; width: 100%; }
 }
 
+.sidebar-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+.sidebar-header-tool-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(56,189,248,.24);
+    background: rgba(11,19,38,.9);
+    color: #7dd3fc;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    font-size: 11px;
+    flex-shrink: 0;
+    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+}
+.sidebar-header-tool-button:hover,
+.sidebar-header-tool-button:focus-visible {
+    background: rgba(14,116,144,.18);
+    border-color: rgba(56,189,248,.58);
+    color: #bae6fd;
+    outline: none;
+}
+.sidebar-header-tool-button:active { transform: translateY(1px); }
+
 /* ============================================================
    NETWORK MONITOR / CONNECTION INDICATOR
    ============================================================ */
@@ -473,9 +502,9 @@ body.light-theme .us-timezone-bar {
 .connection-indicator__label { font-size: 10px; font-weight: 700; white-space: nowrap; }
 .connection-popover {
     position: absolute;
-    bottom: calc(100% + 6px);
+    top: calc(100% + 7px);
     right: 0;
-    width: 228px;
+    width: 238px;
     padding: 8px;
     border: 1px solid rgba(71,85,105,.6);
     border-radius: 12px;
@@ -500,59 +529,7 @@ body.light-theme .us-timezone-bar {
 .connection-popover__note { margin-top:9px; color:#64748b; font-size:8.5px; line-height:1.4; }
 .connection-indicator--compact .connection-indicator__button { padding: 4px 6px; min-height: 28px; }
 .connection-indicator--compact .connection-indicator__label { display:none; }
-.sidebar-header-tools {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
-    flex: 0 0 auto;
-}
-.sidebar-header-tools .connection-indicator {
-    z-index: 90;
-}
-.sidebar-header-tool-button {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    border: 1px solid #1a2744;
-    background: #0b1326;
-    color: #7dd3fc;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-    text-decoration: none;
-    font-size: 11px;
-    flex-shrink: 0;
-    transition: background .15s ease, border-color .15s ease, color .15s ease;
-}
-.sidebar-header-tool-button:hover,
-.sidebar-header-tool-button:focus-visible {
-    background: #111d34;
-    border-color: rgba(56,189,248,.55);
-    color: #bae6fd;
-    outline: none;
-}
-.connection-popover__summary,
-.connection-popover__call,
-.connection-popover__reconnects {
-    color: #94a3b8;
-    font-size: 10px;
-    line-height: 1.45;
-}
-.connection-popover__summary { margin-top: 3px; }
-.connection-popover__call { margin-top: 6px; }
-.connection-popover__reconnects { margin-top: 5px; color: #cbd5e1; }
-.connection-popover__detail-grid {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 3px 10px;
-    margin-top: 7px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(71,85,105,.25);
-    font-size: 9px;
-}
-.connection-popover__detail-grid span { color: #64748b; }
-.connection-popover__detail-grid strong { color: #e2e8f0; font-weight: 700; font-variant-numeric: tabular-nums; }
+
 
 .sidebar-script-search-tools {
     display: flex;
@@ -638,7 +615,7 @@ body.light-theme .us-timezone-bar {
 .speed-test-page__help { margin-top:8px; color:#64748b; font-size:10px; }
 .speed-test-page__help a { color:#7dd3fc; }
 @media (max-width: 640px) {
-    .connection-popover { position: fixed; bottom: auto; top: 8px; left: auto; right: 10px; width: 228px; max-width: calc(100vw - 20px); }
+    .connection-popover { position: fixed; top: 64px; bottom: auto; left: 10px; right:10px; width:auto; }
     .speed-test-page__header { align-items:stretch; flex-direction:column; }
     .speed-test-page__fallback { align-self:flex-start; }
     .speed-test-frame, .speed-test-frame iframe { min-height:360px; }
@@ -653,7 +630,7 @@ body.light-theme .us-timezone-bar {
 .connection-indicator__button.checking .connection-bars span { background: #475569; opacity: .65; }
 .connection-popover { width: 228px; }
 @media (max-width: 640px) {
-    .connection-popover { bottom: auto; top: 8px; width: 228px; max-width: calc(100vw - 20px); }
+    .connection-popover { top: 64px; bottom: auto; width: auto; max-width: calc(100vw - 20px); }
 }
 
 .jitter-stabilizer-page { width: 100%; min-height: calc(100vh - 150px); }
