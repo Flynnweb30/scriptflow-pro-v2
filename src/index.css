@@ -473,10 +473,10 @@ body.light-theme .us-timezone-bar {
 .connection-indicator__label { font-size: 10px; font-weight: 700; white-space: nowrap; }
 .connection-popover {
     position: absolute;
-    top: calc(100% + 8px);
+    bottom: calc(100% + 6px);
     right: 0;
-    width: 300px;
-    padding: 12px;
+    width: 228px;
+    padding: 8px;
     border: 1px solid rgba(71,85,105,.6);
     border-radius: 12px;
     background: rgba(7,12,24,.97);
@@ -516,7 +516,8 @@ body.light-theme .us-timezone-bar {
 .speed-test-page__help { margin-top:8px; color:#64748b; font-size:10px; }
 .speed-test-page__help a { color:#7dd3fc; }
 @media (max-width: 640px) {
-    .connection-popover { position: fixed; top: 58px; left: 10px; right:10px; width:auto; }
+    .connection-popover { position: fixed; bottom: 58px; top: auto; left: 10px; right:10px; width:auto; }
+    .topbar-dialer-row { width: 100%; }
     .speed-test-page__header { align-items:stretch; flex-direction:column; }
     .speed-test-page__fallback { align-self:flex-start; }
     .speed-test-frame, .speed-test-frame iframe { min-height:360px; }
@@ -529,7 +530,42 @@ body.light-theme .us-timezone-bar {
 .connection-indicator__button.degraded .connection-bars span:nth-child(1).active { background: #ef4444; box-shadow: 0 0 5px rgba(239,68,68,.25); }
 .connection-indicator__button.offline .connection-bars span { background: #334155; opacity: .65; }
 .connection-indicator__button.checking .connection-bars span { background: #475569; opacity: .65; }
-.connection-popover { width: 270px; }
+.connection-popover { width: 228px; }
+@media (max-width: 640px) {
+    .connection-popover { bottom: 58px; top: auto; width: auto; max-width: calc(100vw - 20px); }
+}
+.topbar-dialer-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+.topbar-dialer-button {
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(56,189,248,.32);
+    border-radius: 9px;
+    background: rgba(15,23,42,.72);
+    color: #7dd3fc;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 9px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.topbar-dialer-button:hover,
+.topbar-dialer-button:focus-visible {
+    background: rgba(14,116,144,.18);
+    border-color: rgba(56,189,248,.62);
+    color: #bae6fd;
+    outline: none;
+}
+.topbar-dialer-button:active { transform: translateY(1px); }
+.topbar-dialer-button span { display: none; }
 
 .jitter-stabilizer-page { width: 100%; min-height: calc(100vh - 150px); }
 .jitter-stabilizer-page__header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px; }
