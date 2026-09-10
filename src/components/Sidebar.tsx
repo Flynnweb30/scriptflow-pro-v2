@@ -575,6 +575,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </button>
 
                             <button
+                                onClick={() => { setActiveTab('jitterstabilizer'); if (window.innerWidth < 1024) setSidebarOpen(false); }}
+                                style={{
+                                    border: 'none',
+                                    background: activeTab === 'jitterstabilizer' ? '#1e293b' : 'transparent',
+                                    color: activeTab === 'jitterstabilizer' ? '#38bdf8' : '#cbd5e1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '7px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    textAlign: 'left'
+                                }}
+                            >
+                                <i className="fas fa-wave-square" style={{ width: '16px', color: '#22c55e' }}></i>
+                                <span>Jitter Stabilizer</span>
+                            </button>
+
+                            <button
                                 onClick={() => { setActiveTab('analytics'); if (window.innerWidth < 1024) setSidebarOpen(false); }}
                                 style={{
                                     border: 'none',

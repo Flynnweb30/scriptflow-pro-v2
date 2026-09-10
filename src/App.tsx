@@ -33,10 +33,11 @@ import { HistoryModal } from './components/HistoryModal';
 import { BrandMark } from './components/ui/BrandMark';
 import { USTimezoneBar } from './components/USTimezoneBar';
 import { SpeedTest } from './components/SpeedTest';
+import { JitterStabilizer } from './components/JitterStabilizer';
 
 export const App: React.FC = () => {
     // Navigation & UI State
-    const [activeTab, setActiveTab] = useState<'scripts' | 'calendar' | 'analytics' | 'tasks' | 'closers' | 'transcript' | 'speedtest'>('scripts');
+    const [activeTab, setActiveTab] = useState<'scripts' | 'calendar' | 'analytics' | 'tasks' | 'closers' | 'transcript' | 'speedtest' | 'jitterstabilizer'>('scripts');
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [currentScriptKey, setCurrentScriptKey] = useState<string>('opening');
@@ -390,6 +391,10 @@ export const App: React.FC = () => {
 
                     {activeTab === 'speedtest' && (
                         <SpeedTest />
+                    )}
+
+                    {activeTab === 'jitterstabilizer' && (
+                        <JitterStabilizer />
                     )}
 
                     {activeTab === 'tasks' && (

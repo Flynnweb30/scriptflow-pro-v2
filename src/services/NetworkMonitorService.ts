@@ -60,6 +60,7 @@ class NetworkMonitorService {
     private pendingBarCount = 0;
     private peerConnections = new Set<RTCPeerConnection>();
     private peerPollTimer: number | null = null;
+    private lowNetworkMode = false;
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -89,6 +90,22 @@ class NetworkMonitorService {
     }
 
     /** Register an actual WebRTC connection when the calling surface owns one. */
+    setLowNetworkMode(enabled: boolean): void {
+        if (this.lowNetworkMode === enabled) return;
+        this.lowNetworkMode = enabled;
+        if (enabled && this.bandwidthInFlight) {
+            // The in-flight transfer cannot be safely cancelled without treating it as a
+            // failed measurement, so let it finish and suppress future tests.
+        }
+        this.snapshot = { ...this.snapshot };
+        this.emit();
+        if (!enabled && !this.hidden && !this.snapshot.liveCallActive) this.scheduleBandwidth();
+    }
+
+    isLowNetworkMode(): boolean {
+        return this.lowNetworkMode;
+    }
+
     registerPeerConnection(peer: RTCPeerConnection): () => void {
         this.peerConnections.add(peer);
         this.snapshot = { ...this.snapshot, liveCallActive: true };
@@ -185,8 +202,10 @@ class NetworkMonitorService {
             });
             if (!response.ok) throw new Error(`Probe returned ${response.status}`);
             // Consume the body so the browser completes the request before timing it.
-            await response.arrayBuffer();
+            // Measure time to first response byte/header completion. Do not download the
+            // probe payload on every 5-second jitter sample.
             const rtt = Math.max(0.1, performance.now() - startedAt);
+            try { await response.body?.cancel(); } catch { /* ignore stream teardown */ }
             this.recordSuccess(rtt);
         } catch {
             this.recordFailure();
@@ -308,7 +327,7 @@ class NetworkMonitorService {
     }
 
     private async runBandwidthTest(): Promise<void> {
-        if (this.hidden || this.bandwidthInFlight || this.snapshot.liveCallActive || !navigator.onLine) {
+        if (this.hidden || this.bandwidthInFlight || this.snapshot.liveCallActive || this.lowNetworkMode || !navigator.onLine) {
             this.scheduleBandwidth();
             return;
         }
@@ -327,17 +346,50 @@ class NetworkMonitorService {
             const body = await response.arrayBuffer();
             const elapsedSeconds = Math.max((performance.now() - startedAt) / 1000, 0.001);
             const downloadMbps = (body.byteLength * 8) / elapsedSeconds / 1_000_000;
-            this.snapshot = { ...this.snapshot, downloadMbps, lastBandwidthAt: Date.now() };
+
+            // A pure Render Static Site has no upload endpoint. Only populate uploadMbps
+            // when the deployment explicitly provides a CORS-enabled upload probe. Never
+            // infer or fabricate upload speed from download traffic.
+            const uploadUrl = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_NETWORK_UPLOAD_URL;
+            let uploadMbps: number | null = null;
+            if (uploadUrl && !this.snapshot.liveCallActive && !this.lowNetworkMode) {
+                uploadMbps = await this.measureUpload(uploadUrl);
+            }
+
+            this.snapshot = { ...this.snapshot, downloadMbps, uploadMbps, lastBandwidthAt: Date.now() };
             this.emit();
         } catch {
-            // Bandwidth failure is intentionally not treated as connection loss,
-            // and the previous value is cleared so stale bandwidth is never shown.
-            this.snapshot = { ...this.snapshot, downloadMbps: null };
+            // Bandwidth failures never affect connection bars and never become fake zeros.
+            this.snapshot = { ...this.snapshot, downloadMbps: null, uploadMbps: null };
             this.emit();
         } finally {
             window.clearTimeout(timeout);
             this.bandwidthInFlight = false;
             this.scheduleBandwidth();
+        }
+    }
+
+    private async measureUpload(uploadUrl: string): Promise<number | null> {
+        const payload = new Uint8Array(256 * 1024);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 12000);
+        const startedAt = performance.now();
+        try {
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                body: payload,
+                cache: 'no-store',
+                mode: 'cors',
+                signal: controller.signal,
+                headers: { 'Content-Type': 'application/octet-stream' },
+            });
+            if (!response.ok) return null;
+            const elapsedSeconds = Math.max((performance.now() - startedAt) / 1000, 0.001);
+            return (payload.byteLength * 8) / elapsedSeconds / 1_000_000;
+        } catch {
+            return null;
+        } finally {
+            window.clearTimeout(timeout);
         }
     }
 
