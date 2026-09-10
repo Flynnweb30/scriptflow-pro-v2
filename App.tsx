@@ -33,6 +33,8 @@ import { HistoryModal } from './components/HistoryModal';
 import { BrandMark } from './components/ui/BrandMark';
 import { USTimezoneBar } from './components/USTimezoneBar';
 import { SpeedTest } from './components/SpeedTest';
+import { useNetworkMonitor } from './hooks/useNetworkMonitor';
+import { networkMonitor } from './services/NetworkMonitor';
 
 export const App: React.FC = () => {
     // Navigation & UI State
@@ -67,6 +69,12 @@ export const App: React.FC = () => {
     const [callbackDueNotif, setCallbackDueNotif] = useState<AppNotification | null>(null);
     const [callbackDueAppt, setCallbackDueAppt] = useState<Appointment | null>(null);
     const [activitiesInitialPreset, setActivitiesInitialPreset] = useState<'todo' | 'overdue'>('todo');
+    const networkMetrics = useNetworkMonitor();
+
+    useEffect(() => {
+        networkMonitor.setBandwidthPaused(activeTab === 'speedtest');
+        return () => networkMonitor.setBandwidthPaused(false);
+    }, [activeTab]);
 
     // Initial app/auth lifecycle. Workspace listeners are created only after Firebase
     // restores the session, preventing unauthenticated permission-denied queries.
@@ -307,6 +315,8 @@ export const App: React.FC = () => {
                     await FirestoreService.reorderScripts(orderedKeys);
                 }}
                 appointments={appointments}
+                networkMetrics={networkMetrics}
+                onOpenSpeedTest={() => { setActiveTab('speedtest'); if (window.innerWidth < 1024) setSidebarOpen(false); }}
                 onOpenActivities={(preset) => {
                     setActivitiesInitialPreset(preset === 'overdue' ? 'overdue' : 'todo');
                     setActiveTab('calendar');

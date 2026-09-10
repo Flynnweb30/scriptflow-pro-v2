@@ -4,6 +4,7 @@ import { Script, Appointment } from '../types';
 import { Utils } from '../utils/helpers';
 import { FirestoreService } from '../services/FirestoreService';
 import { ConnectionIndicator } from './ConnectionIndicator';
+import { NetworkMetrics } from '../services/NetworkMonitor';
 
 interface SidebarProps {
     activeTab: string;
@@ -26,6 +27,8 @@ interface SidebarProps {
     onToggleFavorite?: (key: string) => void;
     onReorderScripts?: (orderedKeys: string[]) => Promise<void>;
     appointments?: Appointment[];
+    networkMetrics: NetworkMetrics;
+    onOpenSpeedTest: () => void;
     onOpenActivities?: (preset?: 'overdue') => void;
 }
 
@@ -50,6 +53,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onToggleFavorite,
     onReorderScripts,
     appointments = [],
+    networkMetrics,
+    onOpenSpeedTest,
     onOpenActivities
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -504,18 +509,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             borderRadius: '6px'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <i className="fas fa-tools" style={{ color: '#06b6d4', fontSize: '12px' }}></i>
-                            <span style={{ letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>TOOLS & SETTINGS</span>
+                            <span style={{ letterSpacing: '0.05em' }}>TOOLS & SETTINGS</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                            <ConnectionIndicator />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <ConnectionIndicator metrics={networkMetrics} compact />
                             <i className={`fas fa-chevron-${toolsExpanded ? 'down' : 'right'}`} style={{ fontSize: '9px', color: '#64748b' }}></i>
                         </div>
                     </button>
 
                     {toolsExpanded && (
                         <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px', paddingLeft: '6px' }}>
+                            <button
+                                onClick={onOpenSpeedTest}
+                                style={{
+                                    border: 'none',
+                                    background: activeTab === 'speedtest' ? '#1e293b' : 'transparent',
+                                    color: activeTab === 'speedtest' ? '#38bdf8' : '#cbd5e1',
+                                    display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 10px', borderRadius: '8px',
+                                    fontSize: '12px', fontWeight: 600, cursor: 'pointer', textAlign: 'left'
+                                }}
+                            >
+                                <i className="fas fa-tachometer-alt" style={{ width: '16px', color: '#38bdf8' }}></i>
+                                <span>Speed Test</span>
+                            </button>
+
                             <button
                                 onClick={() => {
                                     if (onOpenActivities) onOpenActivities();
@@ -634,27 +653,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             >
                                 <i className="fas fa-headphones" style={{ width: '16px', color: '#ec4899' }}></i>
                                 <span>Transcript Studio</span>
-                            </button>
-
-                            <button
-                                onClick={() => { setActiveTab('speedtest'); if (window.innerWidth < 1024) setSidebarOpen(false); }}
-                                style={{
-                                    border: 'none',
-                                    background: activeTab === 'speedtest' ? '#1e293b' : 'transparent',
-                                    color: activeTab === 'speedtest' ? '#38bdf8' : '#cbd5e1',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '7px 10px',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    textAlign: 'left'
-                                }}
-                            >
-                                <i className="fas fa-tachometer-alt" style={{ width: '16px', color: '#22c55e' }}></i>
-                                <span>Speed Test</span>
                             </button>
 
                             <button

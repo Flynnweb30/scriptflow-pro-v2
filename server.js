@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomBytes } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,32 +39,36 @@ app.use((req, res, next) => {
   next();
 });
 
+// Lightweight same-origin endpoints used by the centralized Network Monitor.
+// They intentionally return no application data and are kept separate from Firebase/auth workflows.
+app.get('/api/network/ping', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.status(204).end();
+});
+
+app.get('/api/network/download', (req, res) => {
+  const requested = Number(req.query.bytes);
+  const bytes = Number.isFinite(requested) ? Math.min(Math.max(Math.floor(requested), 32 * 1024), 1024 * 1024) : 512 * 1024;
+  const payload = Buffer.alloc(bytes);
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Length', String(payload.length));
+  res.end(payload);
+});
+
+app.post('/api/network/upload', express.raw({ type: 'application/octet-stream', limit: '2mb' }), (req, res) => {
+  const bytes = Buffer.isBuffer(req.body) ? req.body.length : 0;
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({ receivedBytes: bytes });
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 // Keep health before the SPA wildcard so /health returns JSON.
 app.get('/health', (_req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString(), uptime: process.uptime() });
-});
-
-// Lightweight same-origin endpoints used by the centralized connection monitor.
-// They deliberately avoid external services so monitoring remains reliable and
-// does not leak user data to a third party.
-app.get('/api/network/ping', (_req, res) => {
-  res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Content-Type': 'text/plain; charset=utf-8' });
-  res.send('ok');
-});
-
-app.get('/api/network/download', (req, res) => {
-  const requested = Number(req.query.bytes || 196608);
-  const bytes = Number.isFinite(requested) ? Math.min(Math.max(Math.floor(requested), 1024), 1048576) : 196608;
-  const payload = randomBytes(bytes);
-  res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Content-Type': 'application/octet-stream', 'Content-Length': String(bytes) });
-  res.end(payload);
-});
-
-app.post('/api/network/upload', express.raw({ type: 'application/octet-stream', limit: '256kb' }), (req, res) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.status(204).end();
 });
 
 app.use((req, res, next) => {
@@ -76,7 +79,7 @@ app.use((req, res, next) => {
     "img-src 'self' data: https: http: blob:",
     "font-src 'self' data: https:",
     "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https:",
-    "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://*.google.com https://fast.com",
+    "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://*.google.com https://fast.com https://*.fast.com",
     "media-src 'self' https: blob:",
     "worker-src 'self' blob:",
     "object-src 'none'",

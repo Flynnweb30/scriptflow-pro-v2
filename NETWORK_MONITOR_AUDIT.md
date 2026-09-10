@@ -1,39 +1,53 @@
-# ScriptFlow Pro — Connection Monitor / Speed Test Audit
+# ScriptFlow Pro — Network Monitor / Speed Test Audit
 
 ## Implemented
-- One singleton `networkMonitor` owns all connection probes, bandwidth tests, browser online/offline listeners, visibility lifecycle, and reconnect counting.
-- Probe cadence: approximately every 5 seconds while the page is visible.
-- Browser offline events immediately force 0 bars / Connection Lost.
-- Two consecutive failed probes confirm loss; the first successful probe after confirmed loss increments the session reconnect counter.
-- Jitter is calculated from measured round-trip probe variation and is the primary quality signal; RTT and packet loss refine the bar classification.
-- No bandwidth is inferred from connection type, signal strength, or latency.
-- Bandwidth tests use same-origin endpoints and actual bytes transferred / elapsed test duration. They run approximately every 60 seconds and are skipped while active audio/video media is detected or while the tab is hidden.
-- Failed bandwidth tests show Unavailable and do not mark the connection lost.
-- Monitoring resumes automatically after reconnection and when the tab becomes visible.
-- Timers/listeners are owned by the singleton and are not recreated when application tabs change.
-- The sidebar Tools & Settings section contains the live four-bar indicator and hover/click metrics.
-- A separate Speed Test tab embeds Fast.com lazily and provides an Open Fast.com fallback if embedding is blocked or does not load.
-- The server provides lightweight same-origin ping/download/upload endpoints.
-- CSP permits the Fast.com frame.
 
-## Files changed
-- `src/services/NetworkMonitor.ts` — new centralized monitor.
-- `src/components/ConnectionIndicator.tsx` — new sidebar indicator and metrics popover.
-- `src/components/SpeedTest.tsx` — new Speed Test tab.
-- `src/components/Sidebar.tsx` — indicator and Speed Test navigation integration.
-- `src/App.tsx` — Speed Test tab integration.
-- `src/index.css` — responsive indicator and Speed Test styling.
-- `server.js` — same-origin measurement endpoints and Fast.com frame CSP allowance.
+- One singleton `NetworkMonitor` is the source of truth for connection state and metrics.
+- Live monitoring starts from the app lifecycle through `useNetworkMonitor` and stops when the final subscriber unmounts.
+- Visible-tab jitter/connectivity probes run approximately every 5 seconds; hidden tabs reduce probes to approximately every 30 seconds.
+- Browser `online` / `offline` events are handled immediately.
+- Jitter is calculated from actual successive same-origin round-trip measurements, or from registered WebRTC inbound audio `jitter` statistics when an active peer connection is registered.
+- Bar thresholds are strict and classification never changes the raw metric shown in the hover panel:
+  - 70 to <181 ms: 4 bars
+  - 181 to <291 ms: 3 bars
+  - 291 to <401 ms: 2 bars
+  - >=401 ms: 1 bar
+  - confirmed offline: 0 bars / Connection Lost
+  - <70 ms or no valid jitter: no quality bar is asserted; the state is unavailable/checking rather than fabricated.
+- Raw latest jitter is never smoothed or fabricated.
+- Reconnects count only after confirmed availability, confirmed loss, then confirmed recovery. Initial offline recovery is not counted.
+- Packet loss and stability use the rolling probe result window.
+- WebRTC audio packet-loss statistics are used for live-call audio loss only when an active WebRTC peer is registered; otherwise audio loss is N/A.
+- Download/upload measurements use real byte transfers and the required Mbps formula against lightweight same-origin endpoints.
+- Bandwidth tests run about every 60 seconds, are paused in hidden tabs, while Speed Test is open, and when an active registered WebRTC call exists.
+- Fast.com is embedded only when the Speed Test tab is opened. A direct external fallback is available and a timeout fallback covers browsers that refuse the frame without surfacing a reliable iframe error event.
+- The Tools & Settings header contains the compact 1–4 bar indicator. Hover/focus exposes all requested metrics.
+- Existing application data/auth/Firebase workflows are not used by the network monitor and are not restructured.
 
-## File-count constraint
-The final project contains 98 files, below the requested 100-file maximum.
+## Server support
 
-## Verification
-- `node --check server.js` — PASS.
-- `node --check public/js/app.js` — PASS.
-- Project file count — 98.
-- Source references for the singleton, lifecycle, endpoints, sidebar integration, and Speed Test tab verified.
-- A full TypeScript/Vite production build could not be completed in this sandbox because the dependency installation environment has no usable npm package cache/registry access. Render should run the final `npm ci && npm run build` in its network-enabled environment.
+`server.js` adds three lightweight same-origin endpoints:
 
-## Important measurement note
-The monitor's jitter value is measured timing variation between repeated same-origin network probes. It is not RTP audio jitter from a specific live-call peer connection. If a future live-call provider exposes WebRTC `RTCStatsReport`, its RTP jitter can be added as a higher-priority source without changing the centralized UI contract.
+- `GET /api/network/ping`
+- `GET /api/network/download`
+- `POST /api/network/upload`
+
+They are independent of Firebase and application records.
+
+## Validation performed
+
+- Parsed all 63 TS/TSX files with the installed TypeScript parser: PASS.
+- Relative-import existence audit across all TS/TSX files: PASS.
+- `server.js` syntax check with Node: PASS.
+- Required network monitor, threshold, lifecycle, bandwidth, reconnect, WebRTC, sidebar, and Speed Test source assertions: PASS.
+- Package contains the existing Render Node Web Service architecture and no new npm dependency.
+
+## Environment limitation
+
+A full `npm ci` / production Vite build could not be completed in this sandbox because the available npm cache is incomplete and registry access is unavailable. The existing `node_modules` directory is also incomplete. Render should run the authoritative network-backed build:
+
+`npm ci && npm run build`
+
+and then start with:
+
+`npm start`
