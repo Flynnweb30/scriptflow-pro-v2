@@ -1,4 +1,5 @@
 export type NetworkState = 'checking' | 'online' | 'degraded' | 'offline';
+export type SpeedTestState = 'idle' | 'running' | 'complete' | 'failed';
 
 export interface NetworkSnapshot {
     state: NetworkState;
@@ -15,6 +16,11 @@ export interface NetworkSnapshot {
     liveCallJitterMs: number | null;
     lastMeasuredAt: number | null;
     lastBandwidthAt: number | null;
+    speedTestState: SpeedTestState;
+    speedTestProgress: number;
+    speedTestPhase: 'idle' | 'latency' | 'download' | 'upload' | 'calculating';
+    speedTestStartedAt: number | null;
+    speedTestDurationMs: number | null;
 }
 
 type Listener = (snapshot: NetworkSnapshot) => void;
@@ -24,7 +30,25 @@ const BANDWIDTH_INTERVAL_MS = 60000;
 const PROBE_TIMEOUT_MS = 4500;
 const MAX_SAMPLES = 12;
 const CONFIRMED_FAILURES = 3;
+const SPEED_TEST_MIN_MS = 10000;
+const SPEED_TEST_TARGET_MS = 16000;
+const SPEED_TEST_MAX_MS = 30000;
+const SPEED_TEST_VERY_SLOW_MAX_MS = 45000;
+const SPEED_TEST_PHASE_MAX_MS = 14000;
+const SPEED_TEST_VERY_SLOW_PHASE_MAX_MS = 20000;
+const SPEED_TEST_LATENCY_MS = 2000;
+const SPEED_TEST_DOWNLOAD_TARGET_MS = 6000;
+const SPEED_TEST_UPLOAD_TARGET_MS = 6000;
+const SPEED_TEST_SLOW_MBPS = 5;
+const SPEED_TEST_UNSTABLE_CV = 0.18;
+const SPEED_TEST_STABLE_CV = 0.10;
+const SPEED_TEST_STABLE_WINDOW = 3;
+const SPEED_TEST_DOWNLOAD_CHUNK = 5_000_000;
+const SPEED_TEST_UPLOAD_CHUNK = 4 * 1024 * 1024;
 const BANDWIDTH_ASSET = '/network-probe.bin';
+const CLOUDFLARE_DOWNLOAD_URL = 'https://speed.cloudflare.com/__down';
+const CLOUDFLARE_UPLOAD_URL = 'https://speed.cloudflare.com/__up';
+const SPEED_MONITOR_STORAGE_KEY = 'scriptflow.speed-monitor.enabled';
 
 const initialSnapshot: NetworkSnapshot = {
     state: 'checking',
@@ -41,6 +65,11 @@ const initialSnapshot: NetworkSnapshot = {
     liveCallJitterMs: null,
     lastMeasuredAt: null,
     lastBandwidthAt: null,
+    speedTestState: 'idle',
+    speedTestProgress: 0,
+    speedTestPhase: 'idle',
+    speedTestStartedAt: null,
+    speedTestDurationMs: null,
 };
 
 class NetworkMonitorService {
@@ -52,6 +81,7 @@ class NetworkMonitorService {
     private bandwidthTimer: number | null = null;
     private probeInFlight = false;
     private bandwidthInFlight = false;
+    private speedTestInFlight = false;
     private consecutiveFailures = 0;
     private confirmedOffline = false;
     private samples: number[] = [];
@@ -61,6 +91,7 @@ class NetworkMonitorService {
     private peerConnections = new Set<RTCPeerConnection>();
     private peerPollTimer: number | null = null;
     private lowNetworkMode = false;
+    private speedMonitorEnabled = this.readSpeedMonitorPreference();
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -89,14 +120,9 @@ class NetworkMonitorService {
         this.startPeerPolling();
     }
 
-    /** Register an actual WebRTC connection when the calling surface owns one. */
     setLowNetworkMode(enabled: boolean): void {
         if (this.lowNetworkMode === enabled) return;
         this.lowNetworkMode = enabled;
-        if (enabled && this.bandwidthInFlight) {
-            // The in-flight transfer cannot be safely cancelled without treating it as a
-            // failed measurement, so let it finish and suppress future tests.
-        }
         this.snapshot = { ...this.snapshot };
         this.emit();
         if (!enabled && !this.hidden && !this.snapshot.liveCallActive) this.scheduleBandwidth();
@@ -104,6 +130,112 @@ class NetworkMonitorService {
 
     isLowNetworkMode(): boolean {
         return this.lowNetworkMode;
+    }
+
+    isSpeedMonitorEnabled(): boolean {
+        return this.speedMonitorEnabled;
+    }
+
+    setSpeedMonitorEnabled(enabled: boolean): void {
+        this.speedMonitorEnabled = enabled;
+        try { window.localStorage.setItem(SPEED_MONITOR_STORAGE_KEY, enabled ? '1' : '0'); } catch { /* storage may be blocked */ }
+        if (enabled && !this.hidden && !this.snapshot.liveCallActive) this.scheduleBandwidth(1000);
+        else if (!enabled && this.bandwidthTimer !== null) {
+            window.clearTimeout(this.bandwidthTimer);
+            this.bandwidthTimer = null;
+        }
+        this.emit();
+    }
+
+    async runSpeedTest(): Promise<void> {
+        if (this.hidden || this.speedTestInFlight || this.snapshot.liveCallActive || this.lowNetworkMode || !navigator.onLine) return;
+        this.speedTestInFlight = true;
+        const startedAt = performance.now();
+        const controller = new AbortController();
+        const hardTimeout = window.setTimeout(() => controller.abort(), SPEED_TEST_VERY_SLOW_MAX_MS + 5000);
+        try {
+            this.updateSpeedTest('running', 0, 'latency', startedAt, null);
+
+            // Phase 1: short latency sample window.
+            const latencySamples = await this.measureLatencyWindow(SPEED_TEST_LATENCY_MS, controller.signal);
+            const latency = latencySamples.length
+                ? latencySamples.reduce((a, b) => a + b, 0) / latencySamples.length
+                : null;
+            if (latency !== null) this.recordSuccess(latency);
+
+            const elapsedAfterLatency = performance.now() - startedAt;
+            const remainingTarget = Math.max(SPEED_TEST_MIN_MS - elapsedAfterLatency, 0);
+            this.updateSpeedTest('running', 13, 'download', startedAt, null);
+
+            // Phase 2: download. The test starts with a normal window and extends when
+            // samples are unstable or the connection is too slow.
+            const download = await this.measureBandwidthPhase('download', SPEED_TEST_DOWNLOAD_TARGET_MS, SPEED_TEST_PHASE_MAX_MS, controller.signal, (p) => {
+                const progress = 13 + Math.min(37, p * 37);
+                this.updateSpeedTest('running', progress, 'download', startedAt, null);
+            });
+
+            if (download !== null) {
+                this.snapshot = { ...this.snapshot, downloadMbps: download.mbps };
+                this.emit();
+            }
+
+            const dynamicUploadStart = Math.max(remainingTarget, SPEED_TEST_TARGET_MS - (performance.now() - startedAt));
+            if (dynamicUploadStart > 0) await this.delay(Math.min(dynamicUploadStart, 500), controller.signal);
+
+            this.updateSpeedTest('running', 50, 'upload', startedAt, null);
+            const upload = await this.measureBandwidthPhase('upload', SPEED_TEST_UPLOAD_TARGET_MS, SPEED_TEST_PHASE_MAX_MS, controller.signal, (p) => {
+                const progress = 50 + Math.min(40, p * 40);
+                this.updateSpeedTest('running', progress, 'upload', startedAt, null);
+            });
+
+            if (upload !== null) {
+                this.snapshot = { ...this.snapshot, uploadMbps: upload.mbps };
+                this.emit();
+            }
+
+            // Slow links are allowed a longer final stabilization window, but never run
+            // indefinitely. The normal path finishes around 10–16 seconds.
+            const currentDownload = download?.mbps ?? 0;
+            const currentUpload = upload?.mbps ?? 0;
+            const verySlow = Math.max(currentDownload, currentUpload) > 0 && Math.max(currentDownload, currentUpload) < SPEED_TEST_SLOW_MBPS;
+            const unstable = this.lastPhaseWasUnstable;
+            const desiredMax = verySlow ? SPEED_TEST_VERY_SLOW_MAX_MS : unstable ? SPEED_TEST_MAX_MS : SPEED_TEST_TARGET_MS;
+            const elapsed = performance.now() - startedAt;
+            if (elapsed < desiredMax && (verySlow || unstable)) {
+                const extraMs = Math.min(desiredMax - elapsed, 5000);
+                await this.delay(extraMs, controller.signal);
+            }
+
+            this.updateSpeedTest('running', 93, 'calculating', startedAt, null);
+            await this.delay(150, controller.signal);
+
+            const duration = performance.now() - startedAt;
+            this.snapshot = {
+                ...this.snapshot,
+                lastBandwidthAt: Date.now(),
+                speedTestState: 'complete',
+                speedTestProgress: 100,
+                speedTestPhase: 'idle',
+                speedTestStartedAt: startedAt,
+                speedTestDurationMs: duration,
+            };
+            this.emit();
+        } catch {
+            const duration = performance.now() - startedAt;
+            this.snapshot = {
+                ...this.snapshot,
+                speedTestState: 'failed',
+                speedTestProgress: 0,
+                speedTestPhase: 'idle',
+                speedTestStartedAt: startedAt,
+                speedTestDurationMs: duration,
+            };
+            this.emit();
+        } finally {
+            window.clearTimeout(hardTimeout);
+            this.speedTestInFlight = false;
+            if (!this.hidden && this.speedMonitorEnabled && !this.snapshot.liveCallActive) this.scheduleBandwidth();
+        }
     }
 
     registerPeerConnection(peer: RTCPeerConnection): () => void {
@@ -117,6 +249,10 @@ class NetworkMonitorService {
         };
     }
 
+    private readSpeedMonitorPreference(): boolean {
+        try { return window.localStorage.getItem(SPEED_MONITOR_STORAGE_KEY) === '1'; } catch { return false; }
+    }
+
     private start(): void {
         if (this.started || typeof window === 'undefined') return;
         this.started = true;
@@ -127,7 +263,11 @@ class NetworkMonitorService {
         window.addEventListener('online', this.handleOnline);
         window.addEventListener('offline', this.handleOffline);
         document.addEventListener('visibilitychange', this.handleVisibility);
-        if (!this.hidden) this.scheduleActiveLoops(true);
+        if (!this.hidden) {
+            this.scheduleActiveLoops(true);
+            // One automatic speed test per app session. Continuous testing remains opt-in.
+            window.setTimeout(() => void this.runSpeedTest(), 700);
+        }
     }
 
     private stopLoops(): void {
@@ -142,13 +282,8 @@ class NetworkMonitorService {
     private scheduleActiveLoops(immediate = false): void {
         this.stopLoops();
         if (this.hidden) return;
-        this.probeTimer = window.setTimeout(() => {
-            void this.runProbe();
-        }, immediate ? 0 : PROBE_INTERVAL_MS);
-        this.bandwidthTimer = window.setTimeout(() => {
-            if (!this.snapshot.liveCallActive) void this.runBandwidthTest();
-            else this.scheduleBandwidth();
-        }, BANDWIDTH_INTERVAL_MS);
+        this.probeTimer = window.setTimeout(() => void this.runProbe(), immediate ? 0 : PROBE_INTERVAL_MS);
+        if (this.speedMonitorEnabled) this.scheduleBandwidth(BANDWIDTH_INTERVAL_MS);
         if (this.peerConnections.size > 0 || this.snapshot.liveCallActive) this.startPeerPolling();
     }
 
@@ -157,12 +292,14 @@ class NetworkMonitorService {
         this.probeTimer = window.setTimeout(() => void this.runProbe(), PROBE_INTERVAL_MS);
     }
 
-    private scheduleBandwidth(): void {
-        if (this.hidden) return;
+    private scheduleBandwidth(delayMs = BANDWIDTH_INTERVAL_MS): void {
+        if (this.hidden || !this.speedMonitorEnabled) return;
+        if (this.bandwidthTimer !== null) window.clearTimeout(this.bandwidthTimer);
         this.bandwidthTimer = window.setTimeout(() => {
-            if (!this.snapshot.liveCallActive) void this.runBandwidthTest();
+            this.bandwidthTimer = null;
+            if (!this.snapshot.liveCallActive) void this.runSpeedTest();
             else this.scheduleBandwidth();
-        }, BANDWIDTH_INTERVAL_MS);
+        }, delayMs);
     }
 
     private handleVisibility = (): void => {
@@ -172,6 +309,7 @@ class NetworkMonitorService {
             return;
         }
         this.scheduleActiveLoops(true);
+        if (!this.snapshot.lastBandwidthAt) window.setTimeout(() => void this.runSpeedTest(), 500);
     };
 
     private handleOffline = (): void => {
@@ -181,10 +319,12 @@ class NetworkMonitorService {
     };
 
     private handleOnline = (): void => {
-        // Do not increment reconnects here. Recovery is confirmed by a successful probe.
         this.confirmedOffline = true;
         this.consecutiveFailures = 0;
-        if (!this.hidden) void this.runProbe();
+        if (!this.hidden) {
+            void this.runProbe();
+            window.setTimeout(() => void this.runSpeedTest(), 500);
+        }
     };
 
     private async runProbe(): Promise<void> {
@@ -195,17 +335,11 @@ class NetworkMonitorService {
         const timeout = window.setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
         try {
             const response = await fetch(`${BANDWIDTH_ASSET}?probe=${Date.now()}-${Math.random().toString(36).slice(2)}`, {
-                method: 'GET',
-                cache: 'no-store',
-                credentials: 'same-origin',
-                signal: controller.signal,
+                method: 'GET', cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
             });
             if (!response.ok) throw new Error(`Probe returned ${response.status}`);
-            // Consume the body so the browser completes the request before timing it.
-            // Measure time to first response byte/header completion. Do not download the
-            // probe payload on every 5-second jitter sample.
             const rtt = Math.max(0.1, performance.now() - startedAt);
-            try { await response.body?.cancel(); } catch { /* ignore stream teardown */ }
+            try { await response.body?.cancel(); } catch { /* ignore */ }
             this.recordSuccess(rtt);
         } catch {
             this.recordFailure();
@@ -227,19 +361,8 @@ class NetworkMonitorService {
         const rawBars = this.barsForJitter(jitter);
         const bars = this.applyHysteresis(rawBars);
         const stability = this.calculateStability(jitter, packetLoss);
-        this.snapshot = {
-            ...this.snapshot,
-            state: bars <= 2 ? 'degraded' : 'online',
-            bars,
-            jitterMs: jitter,
-            latencyMs: rtt,
-            packetLossPct: packetLoss,
-            stabilityPct: stability,
-            lastMeasuredAt: Date.now(),
-        };
-        if (wasConfirmedOffline) {
-            this.snapshot = { ...this.snapshot, reconnects: this.snapshot.reconnects + 1 };
-        }
+        this.snapshot = { ...this.snapshot, state: bars <= 2 ? 'degraded' : 'online', bars, jitterMs: jitter, latencyMs: rtt, packetLossPct: packetLoss, stabilityPct: stability, lastMeasuredAt: Date.now() };
+        if (wasConfirmedOffline) this.snapshot = { ...this.snapshot, reconnects: this.snapshot.reconnects + 1 };
         this.emit();
     }
 
@@ -250,26 +373,11 @@ class NetworkMonitorService {
         if (confirmed) {
             const wasAlreadyOffline = this.confirmedOffline;
             this.confirmedOffline = true;
-            this.snapshot = {
-                ...this.snapshot,
-                state: 'offline',
-                bars: 0,
-                jitterMs: null,
-                latencyMs: null,
-                packetLossPct: this.calculatePacketLoss(this.outcomes),
-                stabilityPct: this.calculateStability(this.snapshot.jitterMs, this.calculatePacketLoss(this.outcomes)),
-                lastMeasuredAt: Date.now(),
-            };
+            this.snapshot = { ...this.snapshot, state: 'offline', bars: 0, jitterMs: null, latencyMs: null, packetLossPct: this.calculatePacketLoss(this.outcomes), stabilityPct: this.calculateStability(this.snapshot.jitterMs, this.calculatePacketLoss(this.outcomes)), lastMeasuredAt: Date.now() };
             if (!wasAlreadyOffline) this.emit();
         } else {
             const packetLoss = this.calculatePacketLoss(this.outcomes);
-            this.snapshot = {
-                ...this.snapshot,
-                jitterMs: null,
-                latencyMs: null,
-                packetLossPct: packetLoss,
-                stabilityPct: this.calculateStability(null, packetLoss),
-            };
+            this.snapshot = { ...this.snapshot, jitterMs: null, latencyMs: null, packetLossPct: packetLoss, stabilityPct: this.calculateStability(null, packetLoss) };
             this.emit();
         }
     }
@@ -283,8 +391,7 @@ class NetworkMonitorService {
 
     private calculatePacketLoss(outcomes: boolean[]): number | null {
         if (!outcomes.length) return null;
-        const failures = outcomes.filter(ok => !ok).length;
-        return (failures / outcomes.length) * 100;
+        return (outcomes.filter(ok => !ok).length / outcomes.length) * 100;
     }
 
     private calculateStability(jitter: number | null, loss: number | null): number | null {
@@ -300,97 +407,144 @@ class NetworkMonitorService {
         if (jitter >= 401) return 1;
         if (jitter >= 291) return 2;
         if (jitter >= 181) return 3;
-        // The requested 4-bar band starts at 70 ms. Measurements below 70 ms are
-        // better than the best specified band and are therefore shown at 4 bars.
         return 4;
     }
 
     private applyHysteresis(nextBars: number): number {
         if (this.snapshot.bars === 0 && this.snapshot.state === 'checking') return nextBars;
-        if (nextBars === this.snapshot.bars) {
-            this.pendingBars = null;
-            this.pendingBarCount = 0;
-            return nextBars;
-        }
-        if (this.pendingBars !== nextBars) {
-            this.pendingBars = nextBars;
-            this.pendingBarCount = 1;
-            return this.snapshot.bars;
-        }
+        if (nextBars === this.snapshot.bars) { this.pendingBars = null; this.pendingBarCount = 0; return nextBars; }
+        if (this.pendingBars !== nextBars) { this.pendingBars = nextBars; this.pendingBarCount = 1; return this.snapshot.bars; }
         this.pendingBarCount += 1;
-        if (this.pendingBarCount >= 2) {
-            this.pendingBars = null;
-            this.pendingBarCount = 0;
-            return nextBars;
-        }
+        if (this.pendingBarCount >= 2) { this.pendingBars = null; this.pendingBarCount = 0; return nextBars; }
         return this.snapshot.bars;
     }
 
-    private async runBandwidthTest(): Promise<void> {
-        if (this.hidden || this.bandwidthInFlight || this.snapshot.liveCallActive || this.lowNetworkMode || !navigator.onLine) {
-            this.scheduleBandwidth();
-            return;
-        }
-        this.bandwidthInFlight = true;
-        const startedAt = performance.now();
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), 12000);
-        try {
-            const response = await fetch(`${BANDWIDTH_ASSET}?bandwidth=${Date.now()}-${Math.random().toString(36).slice(2)}`, {
-                method: 'GET',
-                cache: 'no-store',
-                credentials: 'same-origin',
-                signal: controller.signal,
-            });
-            if (!response.ok) throw new Error(`Bandwidth test returned ${response.status}`);
-            const body = await response.arrayBuffer();
-            const elapsedSeconds = Math.max((performance.now() - startedAt) / 1000, 0.001);
-            const downloadMbps = (body.byteLength * 8) / elapsedSeconds / 1_000_000;
-
-            // A pure Render Static Site has no upload endpoint. Only populate uploadMbps
-            // when the deployment explicitly provides a CORS-enabled upload probe. Never
-            // infer or fabricate upload speed from download traffic.
-            const uploadUrl = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_NETWORK_UPLOAD_URL;
-            let uploadMbps: number | null = null;
-            if (uploadUrl && !this.snapshot.liveCallActive && !this.lowNetworkMode) {
-                uploadMbps = await this.measureUpload(uploadUrl);
+    private async measureLatencyWindow(durationMs: number, signal: AbortSignal): Promise<number[]> {
+        const values: number[] = [];
+        const deadline = performance.now() + durationMs;
+        while (performance.now() < deadline && values.length < 8) {
+            const started = performance.now();
+            try {
+                const response = await fetch(`${CLOUDFLARE_DOWNLOAD_URL}?bytes=1000&latency=${Date.now()}-${Math.random().toString(36).slice(2)}`, { cache: 'no-store', signal });
+                if (!response.ok) throw new Error('latency request failed');
+                await response.arrayBuffer();
+                values.push(performance.now() - started);
+            } catch {
+                if (signal.aborted) throw new Error('speed test aborted');
             }
+        }
+        return values;
+    }
 
-            this.snapshot = { ...this.snapshot, downloadMbps, uploadMbps, lastBandwidthAt: Date.now() };
-            this.emit();
+    private lastPhaseWasUnstable = false;
+
+    private async measureBandwidthPhase(
+        phase: 'download' | 'upload',
+        normalMs: number,
+        maxMs: number,
+        signal: AbortSignal,
+        onProgress: (progress: number) => void,
+    ): Promise<{ mbps: number; bytes: number } | null> {
+        const started = performance.now();
+        const samples: number[] = [];
+        let bytes = 0;
+        let lastProgress = 0;
+        this.lastPhaseWasUnstable = false;
+        let hardDeadline = started + maxMs;
+        const normalDeadline = started + normalMs;
+
+        while (performance.now() < hardDeadline) {
+            const value = phase === 'download'
+                ? await this.measureDownloadChunk(signal)
+                : await this.measureUploadChunk(signal);
+            if (value === null) break;
+            samples.push(value.mbps);
+            bytes += value.bytes;
+            const elapsed = Math.max((performance.now() - started) / 1000, 0.001);
+            const progress = Math.min(1, elapsed / (normalMs / 1000));
+            if (progress > lastProgress) { lastProgress = progress; onProgress(progress); }
+
+            const stable = this.isStable(samples);
+            const unstable = samples.length >= SPEED_TEST_STABLE_WINDOW && this.coefficientOfVariation(samples) >= SPEED_TEST_UNSTABLE_CV;
+            const verySlow = samples.length > 0 && Math.max(...samples) < SPEED_TEST_SLOW_MBPS;
+            if (verySlow) hardDeadline = Math.min(started + SPEED_TEST_VERY_SLOW_PHASE_MAX_MS, started + SPEED_TEST_VERY_SLOW_MAX_MS);
+            this.lastPhaseWasUnstable = unstable;
+
+            // Stable results finish early around 10–15 seconds total. Unstable/slow
+            // links continue sampling until their adaptive ceiling.
+            if (performance.now() >= normalDeadline && stable && !verySlow && !unstable) break;
+            if (performance.now() >= normalDeadline && !unstable && !verySlow && samples.length >= 4) break;
+            if (verySlow && performance.now() < hardDeadline) continue;
+            if (unstable && performance.now() < hardDeadline) continue;
+        }
+
+        if (!samples.length) return null;
+        // Throughput is the median of the per-request rates, which avoids one short
+        // CDN/TCP ramp-up request dominating the final value.
+        const sorted = [...samples].sort((a, b) => a - b);
+        const middle = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+        const totalMbps = (bytes * 8) / Math.max((performance.now() - started) / 1000, 0.001) / 1_000_000;
+        return { mbps: Math.max(0, Math.min(median, totalMbps * 1.5)), bytes };
+    }
+
+    private async measureDownloadChunk(signal: AbortSignal): Promise<{ mbps: number; bytes: number } | null> {
+        const started = performance.now();
+        try {
+            const response = await fetch(`${CLOUDFLARE_DOWNLOAD_URL}?bytes=${SPEED_TEST_DOWNLOAD_CHUNK}&t=${Date.now()}-${Math.random().toString(36).slice(2)}`, { cache: 'no-store', signal });
+            if (!response.ok) return null;
+            const body = await response.arrayBuffer();
+            const seconds = Math.max((performance.now() - started) / 1000, 0.001);
+            return { mbps: (body.byteLength * 8) / seconds / 1_000_000, bytes: body.byteLength };
         } catch {
-            // Bandwidth failures never affect connection bars and never become fake zeros.
-            this.snapshot = { ...this.snapshot, downloadMbps: null, uploadMbps: null };
-            this.emit();
-        } finally {
-            window.clearTimeout(timeout);
-            this.bandwidthInFlight = false;
-            this.scheduleBandwidth();
+            if (signal.aborted) throw new Error('speed test aborted');
+            return null;
         }
     }
 
-    private async measureUpload(uploadUrl: string): Promise<number | null> {
-        const payload = new Uint8Array(256 * 1024);
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), 12000);
-        const startedAt = performance.now();
+    private async measureUploadChunk(signal: AbortSignal): Promise<{ mbps: number; bytes: number } | null> {
+        const payload = new Uint8Array(SPEED_TEST_UPLOAD_CHUNK);
+        // Sparse pseudo-random bytes prevent an intermediary from compressing a zero-filled payload.
+        for (let i = 0; i < payload.length; i += 4096) payload[i] = Math.floor(Math.random() * 256);
+        const started = performance.now();
         try {
-            const response = await fetch(uploadUrl, {
-                method: 'POST',
-                body: payload,
-                cache: 'no-store',
-                mode: 'cors',
-                signal: controller.signal,
+            const response = await fetch(`${CLOUDFLARE_UPLOAD_URL}?t=${Date.now()}-${Math.random().toString(36).slice(2)}`, {
+                method: 'POST', body: payload, cache: 'no-store', mode: 'cors', signal,
                 headers: { 'Content-Type': 'application/octet-stream' },
             });
             if (!response.ok) return null;
-            const elapsedSeconds = Math.max((performance.now() - startedAt) / 1000, 0.001);
-            return (payload.byteLength * 8) / elapsedSeconds / 1_000_000;
+            const seconds = Math.max((performance.now() - started) / 1000, 0.001);
+            return { mbps: (payload.byteLength * 8) / seconds / 1_000_000, bytes: payload.byteLength };
         } catch {
+            if (signal.aborted) throw new Error('speed test aborted');
             return null;
-        } finally {
-            window.clearTimeout(timeout);
         }
+    }
+
+    private coefficientOfVariation(values: number[]): number {
+        if (values.length < 2) return 0;
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        if (!mean) return 1;
+        const variance = values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / values.length;
+        return Math.sqrt(variance) / mean;
+    }
+
+    private isStable(values: number[]): boolean {
+        if (values.length < SPEED_TEST_STABLE_WINDOW) return false;
+        return this.coefficientOfVariation(values.slice(-SPEED_TEST_STABLE_WINDOW)) <= SPEED_TEST_STABLE_CV;
+    }
+
+    private updateSpeedTest(state: SpeedTestState, progress: number, phase: NetworkSnapshot['speedTestPhase'], startedAt: number, duration: number | null): void {
+        this.snapshot = { ...this.snapshot, speedTestState: state, speedTestProgress: Math.max(0, Math.min(100, progress)), speedTestPhase: phase, speedTestStartedAt: startedAt, speedTestDurationMs: duration };
+        this.emit();
+    }
+
+    private delay(ms: number, signal: AbortSignal): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (signal.aborted) { reject(new Error('speed test aborted')); return; }
+            const timer = window.setTimeout(resolve, ms);
+            signal.addEventListener('abort', () => { window.clearTimeout(timer); reject(new Error('speed test aborted')); }, { once: true });
+        });
     }
 
     private startPeerPolling(): void {
@@ -414,17 +568,10 @@ class NetworkMonitorService {
                         if (Number.isFinite(report.jitter)) jitterValues.push(Number(report.jitter) * 1000);
                     }
                 });
-            } catch {
-                // A closed/invalid peer is ignored; application calls are never interrupted.
-            }
+            } catch { /* ignore */ }
         }
         const total = received + lost;
-        this.snapshot = {
-            ...this.snapshot,
-            liveCallActive: this.peerConnections.size > 0,
-            liveCallAudioLossPct: total > 0 ? (lost / total) * 100 : null,
-            liveCallJitterMs: jitterValues.length ? jitterValues.reduce((a, b) => a + b, 0) / jitterValues.length : null,
-        };
+        this.snapshot = { ...this.snapshot, liveCallActive: this.peerConnections.size > 0, liveCallAudioLossPct: total > 0 ? (lost / total) * 100 : null, liveCallJitterMs: jitterValues.length ? jitterValues.reduce((a, b) => a + b, 0) / jitterValues.length : null };
         this.emit();
         this.startPeerPolling();
     }

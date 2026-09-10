@@ -4,9 +4,23 @@ import { NetworkMonitor, NetworkSnapshot } from '../services/NetworkMonitorServi
 const metric = (value: number | null, unit: string) => value === null || !Number.isFinite(value) ? 'N/A' : `${value < 10 ? value.toFixed(1) : Math.round(value)} ${unit}`;
 const pct = (value: number | null) => value === null || !Number.isFinite(value) ? 'N/A' : `${value.toFixed(1)}%`;
 
+const phaseLabel = (phase: NetworkSnapshot['speedTestPhase']) => {
+    if (phase === 'latency') return 'Checking latency';
+    if (phase === 'download') return 'Measuring download';
+    if (phase === 'upload') return 'Measuring upload';
+    if (phase === 'calculating') return 'Calculating result';
+    return 'Ready';
+};
+
+const durationLabel = (durationMs: number | null) => {
+    if (durationMs === null || !Number.isFinite(durationMs)) return '—';
+    return `${(durationMs / 1000).toFixed(1)}s`;
+};
+
 export const ConnectionIndicator: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
     const [snapshot, setSnapshot] = useState<NetworkSnapshot>(NetworkMonitor.getSnapshot());
     const [open, setOpen] = useState(false);
+    const [monitorEnabled, setMonitorEnabled] = useState(NetworkMonitor.isSpeedMonitorEnabled());
     const buttonRef = useRef<HTMLButtonElement>(null);
     const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
     const closeTimerRef = useRef<number | null>(null);
@@ -41,9 +55,9 @@ export const ConnectionIndicator: React.FC<{ compact?: boolean }> = ({ compact =
             const button = buttonRef.current;
             if (!button) return;
             const rect = button.getBoundingClientRect();
-            const width = Math.min(228, Math.max(180, window.innerWidth - 20));
+            const width = Math.min(248, Math.max(190, window.innerWidth - 20));
             const left = Math.min(rect.right + 8, window.innerWidth - width - 10);
-            const top = Math.max(10, Math.min(rect.top, window.innerHeight - 190));
+            const top = Math.max(10, Math.min(rect.top, window.innerHeight - 285));
             setPopoverStyle({ left, top, width });
         };
         updatePopoverPosition();
@@ -55,8 +69,19 @@ export const ConnectionIndicator: React.FC<{ compact?: boolean }> = ({ compact =
         };
     }, [open]);
 
+    const toggleMonitoring = () => {
+        const next = !monitorEnabled;
+        setMonitorEnabled(next);
+        NetworkMonitor.setSpeedMonitorEnabled(next);
+    };
+
+    const runNow = () => {
+        void NetworkMonitor.runSpeedTest();
+    };
+
     const label = snapshot.state === 'checking' ? 'Checking connection…' : snapshot.state === 'offline' ? 'Offline' : `${snapshot.bars}/4 bars`;
     const barClass = snapshot.state === 'offline' ? 'offline' : snapshot.state === 'degraded' ? 'degraded' : snapshot.state === 'checking' ? 'checking' : 'online';
+    const testing = snapshot.speedTestState === 'running';
 
     return (
         <div className={`connection-indicator ${compact ? 'connection-indicator--compact' : ''}`} onMouseLeave={schedulePopoverClose} onMouseEnter={keepPopoverOpen}>
@@ -82,6 +107,20 @@ export const ConnectionIndicator: React.FC<{ compact?: boolean }> = ({ compact =
                         <span className={`connection-state-dot ${barClass}`} />
                     </div>
                     <div className="connection-popover__status">{label}</div>
+
+                    <div className="connection-speed-test">
+                        <div className="connection-speed-test__row">
+                            <div>
+                                <strong>{testing ? phaseLabel(snapshot.speedTestPhase) : snapshot.speedTestState === 'complete' ? 'Speed test complete' : 'Internet speed'}</strong>
+                                <span>{testing ? `${Math.round(snapshot.speedTestProgress)}%` : snapshot.speedTestState === 'complete' ? `Completed in ${durationLabel(snapshot.speedTestDurationMs)}` : 'Automatic test runs once when the app starts.'}</span>
+                            </div>
+                            <button type="button" className="connection-speed-test__button" onClick={runNow} disabled={testing || snapshot.state === 'offline'}>
+                                {testing ? 'Testing…' : 'Test now'}
+                            </button>
+                        </div>
+                        {testing && <div className="connection-speed-test__progress"><span style={{ width: `${snapshot.speedTestProgress}%` }} /></div>}
+                    </div>
+
                     <div className="connection-metrics">
                         <div><span>Round trip</span><strong>{metric(snapshot.latencyMs, 'ms')}</strong></div>
                         <div><span>Jitter</span><strong>{metric(snapshot.jitterMs, 'ms')}</strong></div>
@@ -93,8 +132,13 @@ export const ConnectionIndicator: React.FC<{ compact?: boolean }> = ({ compact =
                         <div><span>Live-call jitter</span><strong>{metric(snapshot.liveCallJitterMs, 'ms')}</strong></div>
                         <div><span>Reconnects</span><strong>{snapshot.reconnects}</strong></div>
                     </div>
+
+                    <label className="connection-speed-monitor-toggle">
+                        <input type="checkbox" checked={monitorEnabled} onChange={toggleMonitoring} />
+                        <span>Continuous speed monitoring</span>
+                    </label>
                     <div className="connection-popover__note">
-                        Measurements are browser-observed. Bandwidth tests pause during an active WebRTC call.
+                        Download and upload use browser-to-edge measurements. Normal tests finish around 10–16 seconds; unstable or very slow connections may continue up to 30–45 seconds. Monitoring is off unless you enable it.
                     </div>
                 </div>
             )}
