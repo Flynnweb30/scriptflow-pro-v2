@@ -422,34 +422,39 @@ body.light-theme .us-timezone-bar {
     .activities-timezone-control select { max-width: none !important; width: 100%; }
 }
 
+/* ============================================================
+   SIDEBAR HEADER ACTIONS
+   ============================================================ */
 .sidebar-header-actions {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 5px;
     flex: 0 0 auto;
 }
-.sidebar-header-tool-button {
+.sidebar-call-quality-button {
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    border: 1px solid rgba(56,189,248,.24);
-    background: rgba(11,19,38,.9);
-    color: #7dd3fc;
+    border: 1px solid #1a2744;
+    background: #0b1326;
+    color: #94a3b8;
     display: grid;
     place-items: center;
     cursor: pointer;
     font-size: 11px;
     flex-shrink: 0;
+    text-decoration: none;
     transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
 }
-.sidebar-header-tool-button:hover,
-.sidebar-header-tool-button:focus-visible {
-    background: rgba(14,116,144,.18);
-    border-color: rgba(56,189,248,.58);
-    color: #bae6fd;
+.sidebar-call-quality-button:hover,
+.sidebar-call-quality-button:focus-visible {
+    background: #111d34;
+    border-color: rgba(56,189,248,.48);
+    color: #7dd3fc;
     outline: none;
 }
-.sidebar-header-tool-button:active { transform: translateY(1px); }
+.sidebar-call-quality-button:active { transform: translateY(1px); }
 
 /* ============================================================
    NETWORK MONITOR / CONNECTION INDICATOR
@@ -501,10 +506,12 @@ body.light-theme .us-timezone-bar {
 .connection-indicator__button.checking .connection-bars span.active { background: #ef4444; box-shadow: none; }
 .connection-indicator__label { font-size: 10px; font-weight: 700; white-space: nowrap; }
 .connection-popover {
-    position: absolute;
-    top: calc(100% + 7px);
-    right: 0;
-    width: 238px;
+    position: fixed;
+    top: 10px;
+    left: 286px;
+    right: auto;
+    bottom: auto;
+    width: 228px;
     padding: 8px;
     border: 1px solid rgba(71,85,105,.6);
     border-radius: 12px;
@@ -615,7 +622,9 @@ body.light-theme .us-timezone-bar {
 .speed-test-page__help { margin-top:8px; color:#64748b; font-size:10px; }
 .speed-test-page__help a { color:#7dd3fc; }
 @media (max-width: 640px) {
-    .connection-popover { position: fixed; top: 64px; bottom: auto; left: 10px; right:10px; width:auto; }
+    .connection-popover {
+        max-width: calc(100vw - 20px);
+    }
     .speed-test-page__header { align-items:stretch; flex-direction:column; }
     .speed-test-page__fallback { align-self:flex-start; }
     .speed-test-frame, .speed-test-frame iframe { min-height:360px; }
@@ -630,7 +639,9 @@ body.light-theme .us-timezone-bar {
 .connection-indicator__button.checking .connection-bars span { background: #475569; opacity: .65; }
 .connection-popover { width: 228px; }
 @media (max-width: 640px) {
-    .connection-popover { top: 64px; bottom: auto; width: auto; max-width: calc(100vw - 20px); }
+    .connection-popover {
+        max-width: calc(100vw - 20px);
+    }
 }
 
 .jitter-stabilizer-page { width: 100%; min-height: calc(100vh - 150px); }

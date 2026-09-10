@@ -207,18 +207,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                         </div>
 
-                        {/* Connection + Call Quality + Close controls */}
+                        {/* Connection / call-quality / close controls */}
                         <div className="sidebar-header-actions">
                             <ConnectionIndicator compact />
-                            <button
-                                type="button"
-                                onClick={() => window.open('https://sales.regen-digital.com/my-call-quality', '_blank', 'noopener,noreferrer')}
-                                className="sidebar-header-tool-button"
-                                title="Open My Call Quality"
-                                aria-label="Open My Call Quality"
+                            <a
+                                className="sidebar-call-quality-button"
+                                href="https://sales.regen-digital.com/my-call-quality"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Open My Call Quality in a new tab"
+                                title="My Call Quality"
                             >
                                 <i className="fas fa-headset" aria-hidden="true"></i>
-                            </button>
+                            </a>
+
+                            {/* Close button box */}
                             <button
                                 onClick={() => setSidebarOpen(false)}
                             style={{
@@ -236,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             }}
                             className="hover:bg-slate-800"
                             title="Close Sidebar"
-                            >
+                        >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
